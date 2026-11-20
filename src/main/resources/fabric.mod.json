@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "brot",
+  "version": "0.1.0",
+  "name": "BROT Client",
+  "environment": "client",
+  "accessWidener": "brot.accesswidener",
+  "entrypoints": { "client": ["dev.brot.core.BROTClient"] },
+  "depends": { "fabricloader": ">=0.16.0", "minecraft": "~1.21.11", "java": ">=21", "fabric-api": "*" }
+}
