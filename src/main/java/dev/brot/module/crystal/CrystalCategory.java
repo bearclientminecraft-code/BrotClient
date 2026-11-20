@@ -8,6 +8,6 @@ public final class CrystalCategory {
     public static void register() {
         ModuleManager.register(new AnchorMacro(), new SafeAnchor(), new DoubleAnchor(), new AnchorDash(),
             new AutoHitCrystal(), new AutoDoubleHand(), new HoverTotem(), new InventoryTotem(), new FastXp(),
-            new PearlMacro());
+            new PearlMacro(), new AutoCrystal());
     }
 }

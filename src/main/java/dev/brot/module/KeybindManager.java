@@ -1,6 +1,7 @@
 package dev.brot.module;
 
 import dev.brot.setting.KeySetting;
+import dev.brot.setting.Setting;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -13,7 +14,20 @@ public final class KeybindManager {
     private static Map<Integer, Boolean> cur = new HashMap<>(), prev = new HashMap<>();
 
     /** Called once at the start of every client tick (ModuleManager.tick). */
-    public static void beginTick() { prev = cur; cur = new HashMap<>(); }
+    /** Key codes >= MOUSE_BASE are mouse buttons (MOUSE_BASE + GLFW button). */
+    public static final int MOUSE_BASE = 1000;
+    public static int mouse(int button) { return MOUSE_BASE + button; }
+
+    /**
+     * Called once at the start of every client tick. Polls EVERY key setting of every module (not only those a module
+     * happened to ask about), so "pressed" edges are never missed when a module skipped its check on the previous tick.
+     */
+    public static void beginTick() {
+        Map<Integer, Boolean> t = prev; prev = cur; cur = t; cur.clear();   // reuse the two maps: no allocation per tick
+        for (Module m : ModuleManager.all())
+            for (Setting<?> s : m.settings())
+                if (s instanceof KeySetting k && !k.hotbar) down(k.get());
+    }
 
     public static boolean down(int key) {
         if (key < 0) return false;
@@ -21,18 +35,22 @@ public final class KeybindManager {
         if (c != null) return c;
         var w = MinecraftClient.getInstance().getWindow();
         if (w == null) return false;
-        boolean d = GLFW.glfwGetKey(w.getHandle(), key) == GLFW.GLFW_PRESS;
+        boolean d = key >= MOUSE_BASE ? GLFW.glfwGetMouseButton(w.getHandle(), key - MOUSE_BASE) == GLFW.GLFW_PRESS
+                                      : GLFW.glfwGetKey(w.getHandle(), key) == GLFW.GLFW_PRESS;
         cur.put(key, d);
         return d;
     }
-    /** True only on the tick the key went down. A key not polled last tick counts as "was down" (no false edge). */
-    public static boolean pressed(int key) { return down(key) && !prev.getOrDefault(key, true); }
+    /** True only on the tick the key/button went down. */
+    public static boolean pressed(int key) { return down(key) && !prev.getOrDefault(key, false); }
     public static boolean pressed(KeySetting s) { return pressed(s.get()); }
     public static boolean down(KeySetting s) { return down(s.get()); }
 
     public static String name(int key, boolean hotbar) {
         if (key < 0) return "None";
         if (hotbar) return String.valueOf(key - GLFW.GLFW_KEY_0);
+        if (key >= MOUSE_BASE) return switch (key - MOUSE_BASE) {
+            case 0 -> "LMB"; case 1 -> "RMB"; case 2 -> "MMB"; default -> "Mouse " + (key - MOUSE_BASE + 1);
+        };
         String n = switch (key) {
             case GLFW.GLFW_KEY_SPACE -> "Space";
             case GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_RIGHT_SHIFT -> "Shift";

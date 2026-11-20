@@ -240,15 +240,20 @@ public class ClickGUI extends Screen {
         }
     }
 
-    private static String keyName(int k) {
-        String n = GLFW.glfwGetKeyName(k, 0);
-        return n != null ? n.toUpperCase(Locale.ROOT) : "K" + k;
-    }
+    private static String keyName(int k) { return KeybindManager.name(k, false); }
 
     // ---------- input (signatures target 1.21.9+ input events: VERIFY) ----------
     @Override public boolean mouseClicked(Click click, boolean doubled) {
         double mx = click.x(), my = click.y(); int b = click.button();
         if (closing) return true;
+        if (SettingWidgets.listening != null) {            // next click binds that mouse button (Esc cancels)
+            var ks = SettingWidgets.listening;
+            SettingWidgets.listening = null;
+            ks.set(KeybindManager.mouse(b));
+            ConfigManager.save();
+            return true;
+        }
+        if (binding != null) { binding.setBind(KeybindManager.mouse(b)); binding = null; ConfigManager.save(); return true; }
         int x0 = x0(), y0 = y0();
         boolean inPanel = mx >= x0 && mx < x0 + W && my >= y0 && my < y0 + H;
 
@@ -333,6 +338,15 @@ public class ClickGUI extends Screen {
         if (searchFocus) {
             if (key == GLFW.GLFW_KEY_BACKSPACE && !cats.search.isEmpty()) { cats.search = cats.search.substring(0, cats.search.length() - 1); scrollTarget = 0; return true; }
             if (key == GLFW.GLFW_KEY_ENTER) { searchFocus = false; return true; }
+        }
+        switch (key) {   // keyboard scrolling (also works on key repeat)
+            case GLFW.GLFW_KEY_UP -> { scrollTarget -= 28; return true; }
+            case GLFW.GLFW_KEY_DOWN -> { scrollTarget += 28; return true; }
+            case GLFW.GLFW_KEY_PAGE_UP -> { scrollTarget -= 140; return true; }
+            case GLFW.GLFW_KEY_PAGE_DOWN -> { scrollTarget += 140; return true; }
+            case GLFW.GLFW_KEY_HOME -> { scrollTarget = 0; return true; }
+            case GLFW.GLFW_KEY_END -> { scrollTarget = Float.MAX_VALUE / 4; return true; }   // clamped in render()
+            default -> {}
         }
         if (key == GLFW.GLFW_KEY_ESCAPE || (key == GLFW.GLFW_KEY_RIGHT_SHIFT && shiftArmed)) { closing = true; open.to(0); }
         return true;

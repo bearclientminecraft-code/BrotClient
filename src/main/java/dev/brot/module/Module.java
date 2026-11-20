@@ -34,4 +34,6 @@ public class Module {
     protected void onEnable() {}
     protected void onDisable() {}
     public void onTick() {}
+    /** Called once per rendered frame while enabled (smooth camera work etc.). */
+    public void onFrame() {}
 }

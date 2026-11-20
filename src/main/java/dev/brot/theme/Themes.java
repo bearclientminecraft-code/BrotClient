@@ -21,7 +21,12 @@ public final class Themes {
         Theme.of("Scarlet",    0x180F12, 0xE66B73),
         Theme.of("Platinum",   0xE9E9EC, 0x5555AA),
         Theme.of("Amber",      0x19150E, 0xD9AD55),
-        Theme.of("Stealth",    0x090A0B, 0x73777D));
+        Theme.of("Stealth",    0x090A0B, 0x73777D),
+        Theme.of("Onyx",       0x0B0B0D, 0xA3A3A3),
+        Theme.of("Sapphire",   0x0B1020, 0x5278D8),
+        Theme.of("Rosewood",   0x180F14, 0xC58A9D),
+        Theme.of("Celestial",  0x111321, 0x929BEF),
+        Theme.of("Copper",     0x17120F, 0xC58B65));
 
     public static final Theme DEFAULT = LIST.get(1); // Eclipse
 

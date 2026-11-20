@@ -2,23 +2,23 @@ package dev.brot.module.crystal;
 
 import dev.brot.setting.NumberSetting;
 import net.minecraft.item.Items;
-import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 
 /**
- * Place anchor -> (First Delay) charge -> (Second Delay) detonate -> (Switch Delay) place a new anchor at the same spot.
- * The second anchor is placed against the SAME supporting block face as the first (never "in the air"):
- * the recorded placement hit is reused. If you start while already aiming at an anchor, the block under it is used
- * as the support (must not be air) - that fallback is untested.
+ * Anchor 1: place -> (First Delay) charge -> (Second Delay) detonate.
+ * (Switch Delay) Anchor 2 on the same spot: place -> (First Delay) charge -> (Second Delay) detonate.
+ * The second anchor is placed against the SAME supporting block face as the first (never "in the air").
+ * If you start while already aiming at an anchor, the block under it is used as the support (must not be air);
+ * that fallback is untested.
  */
 public final class DoubleAnchor extends AnchorModule {
     private final NumberSetting first = delayMs("First Delay", 50, 500), second = delayMs("Second Delay", 50, 500),
         switchDelay = delayMs("Switch Delay", 50, 500);
 
-    public DoubleAnchor() { super("Double Anchor", "Detonate an anchor and immediately re-place one on the same spot"); }
+    public DoubleAnchor() { super("Double Anchor", "Place, charge and detonate two anchors on the same spot in a row"); }
 
     @Override protected void update() {
         if (!triggered()) return;
@@ -36,5 +36,7 @@ public final class DoubleAnchor extends AnchorModule {
         queue.add(aimed ? 0 : first.i(), this::charge);
         queue.add(second.i(), this::detonate);
         queue.add(switchDelay.i(), () -> selectHolding(anchor, Items.RESPAWN_ANCHOR) && useBlock(placeHit));
+        queue.add(first.i(), this::charge);
+        queue.add(second.i(), this::detonate);
     }
 }

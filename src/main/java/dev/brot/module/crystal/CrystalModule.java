@@ -9,7 +9,6 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
-import java.util.function.Supplier;
 
 /** Common base of every Crystal-category module: tick plumbing, cancellation on disable, shared helpers. */
 public abstract class CrystalModule extends Module {
@@ -63,15 +62,27 @@ public abstract class CrystalModule extends Module {
         double s = mc.options.getMouseSensitivity().getValue() * 0.6 + 0.2;
         return (float) (px * 8.0 * s * s * s * 0.15);
     }
-    /** Queue `steps` one-tick steps that move the pitch toward target(); the first one waits firstDelayMs. */
-    protected void queuePitch(long firstDelayMs, Supplier<Float> target, int steps) {
-        for (int i = 0; i < steps; i++) {
-            final int left = steps - i;
-            queue.add(i == 0 ? firstDelayMs : 0, () -> {
-                rotatePitch((target.get() - mc.player.getPitch()) / left);
-                return true;
-            });
-        }
+    // ----- frame-based pitch animation: advanced from onFrame(), so it is smooth at any FPS and independent of ticks -----
+    private boolean animating;
+    private float animFrom, animTo;
+    private long animStart, animDur;
+
+    /** Move the pitch to `to` over durMs (0 = instantly). Smoothstep easing, runs every rendered frame. */
+    protected void startPitchAnim(float to, long durMs) {
+        to = Math.max(-90f, Math.min(90f, to));
+        if (durMs <= 0) { animating = false; rotatePitch(to - mc.player.getPitch()); return; }
+        animFrom = mc.player.getPitch(); animTo = to;
+        animStart = System.nanoTime() / 1_000_000L; animDur = durMs; animating = true;
+    }
+    protected void stopPitchAnim() { animating = false; }
+
+    @Override public final void onFrame() {
+        if (!animating) return;
+        if (mc.player == null) { animating = false; return; }
+        float t = Math.min(1f, (System.nanoTime() / 1_000_000L - animStart) / (float) animDur);
+        float e = t * t * (3f - 2f * t);
+        rotatePitch(animFrom + (animTo - animFrom) * e - mc.player.getPitch());
+        if (t >= 1f) animating = false;
     }
     protected void useItem(Hand hand) { swingIfClient(mc.interactionManager.interactItem(mc.player, hand), hand); }
     /** Mirrors MinecraftClient#doItemUse (1.21.2+ ActionResult.Success / SwingSource) - verify names on 1.21.11. */
@@ -81,6 +92,7 @@ public abstract class CrystalModule extends Module {
     /** Select the hotbar slot of `k`, but only if it really holds `item` (otherwise abort the sequence). */
     protected boolean selectHolding(KeySetting k, Item item) {
         int s = k.slot();
-        return InventoryManager.hotbarHas(s, item) && InventoryManager.select(s);
+        if (!InventoryManager.hotbarHas(s, item)) s = InventoryManager.findHotbar(item);   // configured slot empty -> any hotbar slot with it
+        return s >= 0 && InventoryManager.select(s);
     }
 }

@@ -38,7 +38,7 @@ public class BROTClient implements ClientModInitializer {
             guiKeyDown = down;
         });
         // HudRenderCallback may be deprecated in favour of HudElementRegistry in newer Fabric API: verify.
-        HudRenderCallback.EVENT.register((ctx, tick) -> HUDManager.render(ctx));
+        HudRenderCallback.EVENT.register((ctx, tick) -> { ModuleManager.frame(); HUDManager.render(ctx); });
     }
 
     private static java.util.List<Category> CategoryManager_MAIN() { return dev.brot.gui.CategoryManager.MAIN; }

@@ -2,7 +2,6 @@ package dev.brot.module;
 
 import java.util.*;
 import net.minecraft.client.MinecraftClient;
-import org.lwjgl.glfw.GLFW;
 
 public final class ModuleManager {
     private static final List<Module> MODULES = new ArrayList<>();
@@ -23,16 +22,18 @@ public final class ModuleManager {
         return null;
     }
 
+    /** Once per rendered frame. */
+    public static void frame() { for (Module m : MODULES) if (m.isEnabled()) m.onFrame(); }
+
     /** Polls binds (edge-triggered), only while no screen is open. */
     public static void tick(MinecraftClient mc) {
         if (mc.getWindow() == null) return;
         KeybindManager.beginTick();
-        long h = mc.getWindow().getHandle();
         for (Module m : MODULES) {
             m.onTick();
             int k = m.bind();
             if (k < 0 || mc.currentScreen != null) continue;
-            boolean down = GLFW.glfwGetKey(h, k) == GLFW.GLFW_PRESS;
+            boolean down = KeybindManager.down(k);   // keyboard key or mouse button
             if (down && held.add(k)) m.toggle();
             else if (!down) held.remove(k);
         }

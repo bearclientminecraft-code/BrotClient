@@ -7,21 +7,24 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.screen.slot.Slot;
 
 /**
- * Hovering an item in your own inventory for Hover Delay moves it to Target Slot with a hotbar-swap click
- * (no mouse click needed). Only touches the hovered slot (never armour, never other containers).
- * Target occupied: nothing happens, unless Auto Replace is on - then the vanilla swap puts the old hotbar item
- * into the hovered slot (the only case where another item moves). A hotbar slot already holding a totem is kept.
+ * Hovering an item in your own inventory for Hover Delay moves it (no click needed).
+ * Offhand Totem on: the totem goes to the left hand first; once the left hand holds a totem, the next one goes to
+ * Target Slot. Offhand Totem off: always Target Slot.
+ * Only touches the hovered slot (never armour, never other containers). An occupied destination is left alone unless
+ * Auto Replace is on (vanilla swap: the old item lands in the hovered slot - the only case where another item moves).
+ * A destination that already holds a totem is never replaced.
  */
 public final class HoverTotem extends CrystalModule {
     private final NumberSetting target = slot("Target Slot", 1);
     private final NumberSetting hoverDelay = delayMs("Hover Delay", 100, 1000);
+    private final BooleanSetting offhand = check("Offhand Totem", true);
     private final BooleanSetting onlyTotem = check("Only Totem", true);
     private final BooleanSetting autoReplace = check("Auto Replace", false);
     private Slot last;
     private long since;
     private boolean done;
 
-    public HoverTotem() { super("Hover Totem", "Moves a hovered totem to your target hotbar slot"); }
+    public HoverTotem() { super("Hover Totem", "Moves a hovered totem to your left hand / target hotbar slot"); }
 
     @Override protected void reset() { last = null; done = false; }
 
@@ -33,12 +36,19 @@ public final class HoverTotem extends CrystalModule {
         if (s != last) { last = s; since = now; done = false; }
         if (done || now - since < hoverDelay.i()) return;
 
-        int idx = s.getIndex(), to = idx(target);
         ItemStack st = s.getStack();
         if (st.isEmpty()) return;
-        if (idx < 0 || idx > 35 || idx == to || (onlyTotem.get() && !InventoryManager.isTotem(st))) { done = true; return; }
-        ItemStack occupant = InventoryManager.hotbarStack(to);
         done = true;
+        int idx = s.getIndex(), to = idx(target);
+        if (idx < 0 || idx > 35 || (onlyTotem.get() && !InventoryManager.isTotem(st))) return;
+
+        ItemStack off = mc.player.getOffHandStack();
+        if (offhand.get() && !InventoryManager.isTotem(off) && (off.isEmpty() || autoReplace.get())) {
+            InventoryManager.swapToOffhand(s.id);
+            return;
+        }
+        if (idx == to) return;
+        ItemStack occupant = InventoryManager.hotbarStack(to);
         if (!occupant.isEmpty() && (InventoryManager.isTotem(occupant) || !autoReplace.get())) return;
         InventoryManager.swapToHotbar(s.id, to);
     }
