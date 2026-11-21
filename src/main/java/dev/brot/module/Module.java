@@ -1,5 +1,6 @@
 package dev.brot.module;
 
+import dev.brot.setting.BindSetting;
 import dev.brot.setting.Setting;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,10 +14,15 @@ public class Module {
 
     public Module(String name, String description, Category category) {
         this.name = name; this.description = description; this.category = category;
+        if (category != Category.THEMES) settings.add(new BindSetting(this));   // every module gets a Bind Key row
     }
 
     protected <S extends Setting<?>> S add(S s) { settings.add(s); return s; }
+    protected <S extends Setting<?>> S add(S s, String description) { s.description = description; return add(s); }
     public List<Setting<?>> settings() { return settings; }
+
+    /** Modules that are driven by another module's setting have no card in the ClickGUI. */
+    public boolean hiddenInGui() { return false; }
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean v) {

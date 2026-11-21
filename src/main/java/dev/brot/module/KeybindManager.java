@@ -24,9 +24,11 @@ public final class KeybindManager {
      */
     public static void beginTick() {
         Map<Integer, Boolean> t = prev; prev = cur; cur = t; cur.clear();   // reuse the two maps: no allocation per tick
-        for (Module m : ModuleManager.all())
+        for (Module m : ModuleManager.all()) {
+            down(m.bind());   // module toggle keys are polled every tick too, so edges survive open screens
             for (Setting<?> s : m.settings())
                 if (s instanceof KeySetting k && !k.hotbar) down(k.get());
+        }
     }
 
     public static boolean down(int key) {

@@ -22,7 +22,7 @@ public final class ConfigManager {
                 o.addProperty("bind", m.bind());
                 if (m instanceof HudElement h) { o.addProperty("x", h.x); o.addProperty("y", h.y); }
                 JsonObject s = new JsonObject();
-                for (Setting<?> st : m.settings()) s.add(st.name, st.toJson());
+                for (Setting<?> st : m.settings()) if (st.persistent()) s.add(st.name, st.toJson());
                 o.add("settings", s);
                 root.add(m.name, o);
             }
@@ -40,7 +40,7 @@ public final class ConfigManager {
                 if (o.has("settings")) {
                     JsonObject s = o.getAsJsonObject("settings");
                     for (Setting<?> st : m.settings())
-                        if (s.has(st.name)) try { st.fromJson(s.get(st.name)); } catch (Exception ignored) {}
+                        if (st.persistent() && s.has(st.name)) try { st.fromJson(s.get(st.name)); } catch (Exception ignored) {}
                 }
                 if (o.has("bind")) m.setBind(o.get("bind").getAsInt());
                 if (o.has("enabled")) m.restoreEnabled(o.get("enabled").getAsBoolean());

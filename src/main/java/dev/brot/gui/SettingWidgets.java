@@ -1,6 +1,7 @@
 package dev.brot.gui;
 
 import dev.brot.module.KeybindManager;
+import dev.brot.module.ModuleManager;
 import dev.brot.render.*;
 import dev.brot.setting.*;
 import dev.brot.theme.Theme;
@@ -13,7 +14,40 @@ public final class SettingWidgets {
     private SettingWidgets() {}
     public static final int GAP = 4;
     /** Key setting currently waiting for a key press (owned by the open ClickGUI). */
-    public static KeySetting listening;
+    public static Setting<Integer> listening;
+    /** Number setting currently being typed into (right-click on its slider) and its text buffer. */
+    public static NumberSetting editing;
+    public static String editBuf = "";
+    private static final int WARN = 0xFFE5534B;
+
+    public static boolean isKey(Setting<?> s) { return s instanceof KeySetting || s instanceof BindSetting; }
+    /** Key-like row as Setting<Integer>, or null. */
+    private static Setting<Integer> keyRow(Setting<?> s) { return s instanceof KeySetting k ? k : s instanceof BindSetting b ? b : null; }
+    /** Who already uses this row's key (Bind Key rows and non-hotbar key settings only), or null. */
+    public static String conflictOf(Setting<?> s) {
+        Setting<Integer> k = keyRow(s);
+        if (k == null || (k instanceof KeySetting ks && ks.hotbar)) return null;
+        return ModuleManager.conflict(k, k.get());
+    }
+
+    public static void startEdit(NumberSetting n) {
+        editing = n;
+        editBuf = n.step >= 1 ? String.valueOf(n.i()) : String.format(Locale.ROOT, "%.2f", n.get()).replaceAll("0+$", "").replaceAll("\\.$", "");
+    }
+    public static void cancelInput() { listening = null; editing = null; }
+    /** Applies the typed value (clamped to the setting's range and step); unparsable text is ignored. */
+    public static boolean commitEdit() {
+        if (editing == null) return false;
+        try { editing.setClamped(Double.parseDouble(editBuf)); } catch (NumberFormatException ignored) {}
+        editing = null;
+        return true;
+    }
+    public static void editKey(int key) {
+        if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_BACKSPACE && !editBuf.isEmpty()) editBuf = editBuf.substring(0, editBuf.length() - 1);
+    }
+    public static void editChar(int cp) {
+        if (editBuf.length() < 8 && ((cp >= '0' && cp <= '9') || (cp == '.' && !editBuf.contains(".")))) editBuf += (char) cp;
+    }
     private static final int CHIP_H = 12, TILE_H = 30, TILE_GAP = 4;
 
     /** Tile i of the theme grid (2 columns) -> {x, y, w}. */
@@ -25,7 +59,7 @@ public final class SettingWidgets {
     public interface ChipVisitor { void chip(String mode, int cx, int cy, int cw); }
 
     public static int height(Setting<?> s, int w) {
-        if (s instanceof KeySetting) return 14;
+        if (isKey(s)) return 14;
         if (s instanceof BooleanSetting) return 12;
         if (s instanceof NumberSetting) return 22;
         if (s instanceof ModeSetting m) return 12 + chipRows(m, w) * (CHIP_H + 2);
@@ -60,7 +94,12 @@ public final class SettingWidgets {
             FontRenderer.draw(c, n.name, x, y, label);
             String v = n.step >= 1 ? String.valueOf(n.i()) : String.format(Locale.ROOT, n.step >= 0.1 ? "%.1f" : "%.2f", n.get());
             if (!n.unit.isEmpty()) v += " " + n.unit;
-            FontRenderer.draw(c, v, x + w - FontRenderer.width(v), y, txt);
+            if (editing == n) {   // typing: boxed buffer + caret instead of the value
+                v = editBuf + ((System.currentTimeMillis() / 500) % 2 == 0 ? "_" : "") + (n.unit.isEmpty() ? "" : " " + n.unit);
+                int bw = FontRenderer.width(v) + 8;
+                GUIRenderer.roundBorder(c, x + w - bw, y - 2, bw, 12, 4, ThemeManager.active(), acc);
+            }
+            FontRenderer.draw(c, v, x + w - FontRenderer.width(v) - (editing == n ? 4 : 0), y, txt);
             GUIRenderer.round(c, x, y + 13, w, 4, 2, ThemeManager.border());
             int fw = Math.max(4, (int) (w * n.ratio()));
             GUIRenderer.round(c, x, y + 13, fw, 4, 2, acc);
@@ -72,14 +111,16 @@ public final class SettingWidgets {
                 GUIRenderer.round(c, x + cx, y + 11 + cy, cw, CHIP_H, 4, sel ? ThemeManager.active() : ThemeManager.hover());
                 FontRenderer.draw(c, n, x + cx + 4, y + 13 + cy, sel ? txt : label);
             });
-        } else if (s instanceof KeySetting ks) {
+        } else if (keyRow(s) != null) {
+            Setting<Integer> ks = keyRow(s);
+            boolean hot = ks instanceof KeySetting k && k.hotbar, lis = listening == ks, set = ks.get() >= 0;
+            boolean warn = !lis && conflictOf(s) != null;
             FontRenderer.draw(c, ks.name, x, y + 2, label);
-            boolean lis = listening == ks;
-            String t = lis ? "..." : KeybindManager.name(ks.get(), ks.hotbar);
+            String t = lis ? "..." : (warn ? "! " : "") + KeybindManager.name(ks.get(), hot);
             int tw = Math.max(18, FontRenderer.width(t) + 10);
             GUIRenderer.roundBorder(c, x + w - tw, y, tw, 12, 4, lis ? ThemeManager.active() : ThemeManager.hover(),
-                lis ? acc : ThemeManager.border());
-            FontRenderer.drawCentered(c, t, x + w - tw / 2, y + 2, lis || ks.isSet() ? txt : label);
+                lis ? acc : warn ? WARN : ThemeManager.border());
+            FontRenderer.drawCentered(c, t, x + w - tw / 2, y + 2, warn ? WARN : lis || set ? txt : label);
         } else if (s instanceof ThemeSetting ts) {
             FontRenderer.draw(c, ts.name, x, y, label);
             FontRenderer.draw(c, ThemeManager.selectedName(), x + w - FontRenderer.width(ThemeManager.selectedName()), y, txt);
@@ -102,11 +143,13 @@ public final class SettingWidgets {
 
     /** Boolean/Mode clicks. Number sliders are handled by the screen (drag). */
     public static boolean click(Setting<?> s, int x, int y, int w, double mx, double my, int button) {
-        if (s instanceof KeySetting ks) {
+        Setting<Integer> ks = keyRow(s);
+        if (ks != null) {
             if (button == 0) { listening = ks; return true; }
             if (button == 1) { ks.set(-1); return true; }   // clear (ignored for hotbar keys)
             return false;
         }
+        if (s instanceof NumberSetting n && button == 1) { startEdit(n); return true; }   // type an exact value
         if (button != 0) return false;
         if (s instanceof BooleanSetting b) { b.set(!b.get()); return true; }
         if (s instanceof ThemeSetting ts) {

@@ -3,6 +3,7 @@ package dev.brot.hud;
 import dev.brot.module.*;
 import dev.brot.module.Module;
 import dev.brot.render.GUIRenderer;
+import dev.brot.setting.BooleanSetting;
 import java.util.*;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
@@ -11,6 +12,8 @@ public final class HUDManager {
     private HUDManager() {}
 
     public static final class MasterModule extends Module {
+        public final BooleanSetting watermark = add(new BooleanSetting("Watermark", true),
+            "Info bar: name, FPS, ping, time, coordinates, TPS and speed");
         MasterModule() { super("HUD", "Show HUD elements", Category.HUD); restoreEnabled(true); }
     }
     public static final MasterModule MASTER = new MasterModule();
@@ -21,7 +24,11 @@ public final class HUDManager {
 
     public static void render(DrawContext ctx) {
         if (!MASTER.isEnabled()) return;
-        for (HudElement e : ELEMENTS) if (e.isEnabled()) renderOne(ctx, e);
+        int sw = MinecraftClient.getInstance().getWindow().getScaledWidth();
+        for (HudElement e : ELEMENTS) {
+            e.layoutDefault(sw);
+            if (e.shown()) renderOne(ctx, e);
+        }
     }
 
     public static void renderOne(DrawContext ctx, HudElement e) {

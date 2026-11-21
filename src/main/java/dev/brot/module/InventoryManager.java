@@ -26,6 +26,11 @@ public final class InventoryManager {
         for (int i = 0; i < 9; i++) if (hotbarStack(i).isOf(item)) return i;
         return -1;
     }
+    /** First hotbar slot (0..8) whose stack matches `p`, or -1. */
+    public static int findHotbarMatching(java.util.function.Predicate<ItemStack> p) {
+        for (int i = 0; i < 9; i++) if (p.test(hotbarStack(i))) return i;
+        return -1;
+    }
     public static boolean isTotem(ItemStack s) { return s.isOf(Items.TOTEM_OF_UNDYING); }
 
     /** Swap the clicked screen-handler slot with the off hand (vanilla swap button 40). */

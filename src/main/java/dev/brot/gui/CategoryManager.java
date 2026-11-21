@@ -13,9 +13,9 @@ public final class CategoryManager {
     public String search = "";
 
     public List<Module> visibleModules() {
-        if (search.isBlank()) return ModuleManager.in(selected);
+        if (search.isBlank()) return ModuleManager.in(selected).stream().filter(m -> !m.hiddenInGui()).toList();
         String q = search.toLowerCase(Locale.ROOT);
         return ModuleManager.all().stream()
-            .filter(m -> !m.category.misc && m.name.toLowerCase(Locale.ROOT).contains(q)).toList();
+            .filter(m -> !m.category.misc && !m.hiddenInGui() && m.name.toLowerCase(Locale.ROOT).contains(q)).toList();
     }
 }

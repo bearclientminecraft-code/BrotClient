@@ -44,7 +44,7 @@ public class ClickGUI extends Screen {
 
     @Override public boolean shouldPause() { return false; }
     @Override public boolean shouldCloseOnEsc() { return false; }
-    @Override public void removed() { SettingWidgets.listening = null; ConfigManager.save(); }
+    @Override public void removed() { SettingWidgets.commitEdit(); SettingWidgets.cancelInput(); ConfigManager.save(); }
 
     // ---------- geometry ----------
     private int x0() { return (width - W) / 2; }
@@ -139,10 +139,16 @@ public class ClickGUI extends Screen {
             if (mx >= k.x && mx < k.x + k.w && my >= k.y && my < k.y + HEADER && my >= vy && my < vy + vh) hover = k;
         }
         GUIRenderer.endScissor(c);
-        if (hover != null && !hover.m.description.isEmpty()) {
-            int tw = FontRenderer.width(hover.m.description) + 8;
-            GUIRenderer.roundBorder(c, mx + 8, my + 8, tw, 14, 4, GUIRenderer.alpha(ThemeManager.card(), 0.95f), ThemeManager.border());
-            FontRenderer.draw(c, hover.m.description, mx + 12, my + 11, ThemeManager.text());
+        Setting<?>[] hovSetting = {null};   // setting row under the mouse (expanded cards only)
+        if (my >= vy && my < vy + vh)
+            for (Card k : cards)
+                if (exp(k.m) > 0.9f && mx >= k.x && mx < k.x + k.w && my >= k.y + HEADER && my < k.y + k.h)
+                    rows(k, (s, x, y, w, h) -> { if (mx >= x && mx < x + w && my >= y && my < y + h) hovSetting[0] = s; });
+        String tip = hovSetting[0] != null ? tooltip(hovSetting[0]) : hover != null ? hover.m.description : "";
+        if (!tip.isEmpty()) {
+            int tw = FontRenderer.width(tip) + 8, tx = Math.max(2, Math.min(mx + 8, width - tw - 2));
+            GUIRenderer.roundBorder(c, tx, my + 8, tw, 14, 4, GUIRenderer.alpha(ThemeManager.card(), 0.95f), ThemeManager.border());
+            FontRenderer.draw(c, tip, tx + 4, my + 11, ThemeManager.text());
         }
 
         GUIRenderer.globalAlpha = open.value;
@@ -233,11 +239,20 @@ public class ClickGUI extends Screen {
 
     private void drawHudOutlines(DrawContext c) {
         for (HudElement e : HUDManager.elements()) {
-            if (!e.isEnabled()) continue;
+            if (!e.shown()) continue;
             int[] b = HUDManager.bounds(e);
             int col = e == dragHud ? ThemeManager.text() : GUIRenderer.alpha(ThemeManager.accent(), 0.9f);
             GUIRenderer.outline(c, b[0] - 2, b[1] - 2, b[2] + 4, b[3] + 4, 5, col, 1.5f);
         }
+    }
+
+    /** Setting description, plus a key-conflict warning and the "type a value" hint where they apply. */
+    private static String tooltip(Setting<?> s) {
+        StringBuilder b = new StringBuilder(s.description);
+        if (s instanceof NumberSetting) b.append(b.isEmpty() ? "" : "  ").append("(RMB: type a value)");
+        String cf = SettingWidgets.conflictOf(s);
+        if (cf != null) b.append(b.isEmpty() ? "" : "  ").append("! Key also used by ").append(cf);
+        return b.toString();
     }
 
     private static String keyName(int k) { return KeybindManager.name(k, false); }
@@ -254,6 +269,7 @@ public class ClickGUI extends Screen {
             return true;
         }
         if (binding != null) { binding.setBind(KeybindManager.mouse(b)); binding = null; ConfigManager.save(); return true; }
+        if (SettingWidgets.commitEdit()) ConfigManager.save();   // a click anywhere else applies a typed number first
         int x0 = x0(), y0 = y0();
         boolean inPanel = mx >= x0 && mx < x0 + W && my >= y0 && my < y0 + H;
 
@@ -263,7 +279,7 @@ public class ClickGUI extends Screen {
                 Collections.reverse(els);
                 for (HudElement e : els) {
                     int[] bb = HUDManager.bounds(e);
-                    if (e.isEnabled() && mx >= bb[0] && mx < bb[0] + bb[2] && my >= bb[1] && my < bb[1] + bb[3]) {
+                    if (e.shown() && mx >= bb[0] && mx < bb[0] + bb[2] && my >= bb[1] && my < bb[1] + bb[3]) {
                         dragHud = e; dragOffX = (int) mx - e.x; dragOffY = (int) my - e.y; return true;
                     }
                 }
@@ -281,7 +297,7 @@ public class ClickGUI extends Screen {
         int vy = y0 + PAD, vh = H - 2 * PAD;
         if (my < vy || my >= vy + vh) return true;
         binding = null;
-        SettingWidgets.listening = null;   // any click cancels a pending key capture (a click on a key chip re-arms it below)
+        SettingWidgets.cancelInput();   // any click cancels a pending key capture (a click on a key chip re-arms it below)
         for (Card k : layout()) {
             if (mx < k.x || mx >= k.x + k.w || my < k.y || my >= k.y + k.h) continue;
             if (my < k.y + HEADER) {
@@ -293,7 +309,7 @@ public class ClickGUI extends Screen {
             if (exp(k.m) > 0.9f) rows(k, (s, x, y, w, h) -> {
                 if (my < y || my >= y + h || mx < x || mx >= x + w) return;
                 if (s instanceof NumberSetting n && b == 0) { dragNum = n; dragX = x; dragW = w; SettingWidgets.drag(n, x, w, mx); }
-                else if (SettingWidgets.click(s, x, y, w, mx, my, b) && s instanceof KeySetting ks && b == 1) ConfigManager.save();
+                else if (SettingWidgets.click(s, x, y, w, mx, my, b) && SettingWidgets.isKey(s) && b == 1) ConfigManager.save();
             });
             return true;
         }
@@ -322,6 +338,12 @@ public class ClickGUI extends Screen {
 
     @Override public boolean keyPressed(KeyInput input) {
         int key = input.key();
+        if (SettingWidgets.editing != null) {                         // typing a number: Enter applies, Esc cancels
+            if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) { SettingWidgets.commitEdit(); ConfigManager.save(); }
+            else if (key == GLFW.GLFW_KEY_ESCAPE) SettingWidgets.cancelInput();
+            else SettingWidgets.editKey(key);
+            return true;
+        }
         if (SettingWidgets.listening != null) {
             var ks = SettingWidgets.listening;
             SettingWidgets.listening = null;
@@ -353,6 +375,7 @@ public class ClickGUI extends Screen {
     }
 
     @Override public boolean charTyped(CharInput input) {
+        if (SettingWidgets.editing != null) { SettingWidgets.editChar(input.codepoint()); return true; }
         if (searchFocus && cats.search.length() < 16) {
             int cp = input.codepoint();
             if (cp >= 32) { cats.search += new String(Character.toChars(cp)); scrollTarget = 0; }
